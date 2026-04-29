@@ -51,12 +51,14 @@ function toPreviewSrc(src: string, width: number): string {
   return src.replace("/content/", `/content-mips/${width}/`);
 }
 
-function pickMipLevel(rectWidth: number): number {
+function pickMipLevel(rectWidth: number): number | null {
   const safeWidth = Number.isFinite(rectWidth) ? rectWidth : 0;
+  const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 1) : 1;
+  const requiredWidth = safeWidth * dpr;
   for (const level of MIP_LEVELS) {
-    if (safeWidth <= level) return level;
+    if (requiredWidth <= level) return level;
   }
-  return MIP_LEVELS[MIP_LEVELS.length - 1];
+  return null;
 }
 
 function LazyMedia({
@@ -82,7 +84,7 @@ function LazyMedia({
           observer.disconnect();
         }
       },
-      { rootMargin: "300px 0px", threshold: 0.01 },
+      { rootMargin: "0px", threshold: 0.01 },
     );
 
     observer.observe(element);
@@ -104,7 +106,8 @@ function LazyMedia({
   }, []);
 
   const mipLevel = pickMipLevel(containerWidth);
-  const previewSrc = withBasePath(toPreviewSrc(src, mipLevel));
+  const previewSrc =
+    mipLevel === null ? src : withBasePath(toPreviewSrc(src, mipLevel));
   const finalSrc = sourceOverride ?? previewSrc;
 
   useEffect(() => {
