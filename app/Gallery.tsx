@@ -56,6 +56,28 @@ function toPreviewSrc(src: string, width: number): string {
   return src.replace("/content/", `/content-mips/${width}/`);
 }
 
+function formatResolutionLabel({
+  width,
+  height,
+  mipLevel,
+  useMipmaps,
+  usingOriginal,
+}: {
+  width?: number;
+  height?: number;
+  mipLevel: number | null;
+  useMipmaps: boolean;
+  usingOriginal: boolean;
+}): string | null {
+  if (!useMipmaps) return null;
+  if (!width || !height) return usingOriginal ? "orig" : "mip";
+  if (usingOriginal || mipLevel === null) return `${width}x${height}`;
+
+  const targetWidth = Math.min(mipLevel, width);
+  const targetHeight = Math.max(1, Math.round((height / width) * targetWidth));
+  return `${targetWidth}x${targetHeight}`;
+}
+
 function pickMipLevel(rectWidth: number): number | null {
   const safeWidth = Number.isFinite(rectWidth) ? rectWidth : 0;
   const dpr = typeof window !== "undefined" ? Math.max(window.devicePixelRatio || 1, 1) : 1;
@@ -120,6 +142,14 @@ function LazyMedia({
   const previewSrc =
     !useMipmaps || mipLevel === null ? src : withBasePath(toPreviewSrc(src, mipLevel));
   const finalSrc = sourceOverride ?? previewSrc;
+  const usingOriginal = finalSrc === src;
+  const resolutionLabel = formatResolutionLabel({
+    width,
+    height,
+    mipLevel,
+    useMipmaps,
+    usingOriginal,
+  });
 
   useEffect(() => {
     setSourceOverride(null);
@@ -128,7 +158,7 @@ function LazyMedia({
   const aspectRatio = width && height ? `${width} / ${height}` : video ? "9 / 16" : "3 / 4";
 
   return (
-    <div ref={wrapperRef} className="bg-neutral-100 dark:bg-neutral-900">
+    <div ref={wrapperRef} className="relative bg-neutral-100 dark:bg-neutral-900">
       {shouldLoad ? (
         video ? (
           <video
@@ -159,6 +189,11 @@ function LazyMedia({
         )
       ) : (
         <div className="w-full" style={{ aspectRatio }} />
+      )}
+      {shouldLoad && !video && resolutionLabel && (
+        <div className="pointer-events-none absolute bottom-1.5 right-1.5 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-mono text-white/90">
+          {resolutionLabel}
+        </div>
       )}
     </div>
   );
@@ -451,30 +486,35 @@ export default function Gallery({ images }: GalleryProps) {
       {activeImage && (
         <div
           className="
-            fixed inset-0 z-50
+            fixed inset-0 z-[80]
             bg-black/90
             flex items-center justify-center
             cursor-pointer
           "
+          role="dialog"
+          aria-modal="true"
           onClick={() => setActiveImage(null)}
         >
-          {isVideo(activeImage) ? (
-            <video
-              src={withBasePath(activeImage)}
-              className="max-w-full max-h-full"
-              muted
-              playsInline
-              loop
-              autoPlay
-              controls
-            />
-          ) : (
-            <img
-              src={withBasePath(activeImage)}
-              alt=""
-              className="max-w-full max-h-full"
-            />
-          )}
+          <div className="relative inline-block max-h-full max-w-full">
+            {isVideo(activeImage) ? (
+              <video
+                src={withBasePath(activeImage)}
+                className="max-h-[95vh] max-w-full"
+                muted
+                playsInline
+                loop
+                autoPlay
+                onClick={() => setActiveImage(null)}
+              />
+            ) : (
+              <img
+                src={withBasePath(activeImage)}
+                alt=""
+                className="max-h-[95vh] max-w-full"
+                onClick={() => setActiveImage(null)}
+              />
+            )}
+          </div>
           <div
             className="pointer-events-none absolute bottom-4 left-4 max-w-[min(90vw,28rem)] truncate font-mono text-[11px] text-white/30 select-text"
             aria-hidden

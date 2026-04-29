@@ -20,7 +20,8 @@ async function convertHeicInDir(dir) {
     const jpgPath = path.join(dir, baseName + ".jpg");
 
     if (fs.existsSync(jpgPath)) {
-      // Already converted
+      // Already converted, remove source HEIC.
+      fs.unlinkSync(fullPath);
       continue;
     }
 
@@ -34,6 +35,7 @@ async function convertHeicInDir(dir) {
     });
 
     fs.writeFileSync(jpgPath, outputBuffer);
+    fs.unlinkSync(fullPath);
   }
 }
 
