@@ -7,11 +7,12 @@ import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./gallery
 import mipLevelsJson from "../config/mip-levels.json";
 
 interface GalleryProps {
-  images: string[];
+  images: { src: string; width?: number; height?: number }[];
 }
 
 const ORDER_STORAGE_KEY = "portfolio-content-image-order";
 const REORDER_UI_KEY = "portfolio-gallery-reorder-ui";
+const MIPMAPS_UI_KEY = "portfolio-gallery-mipmaps-ui";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const MIP_LEVELS = [...mipLevelsJson.levels].sort((a, b) => a - b);
 
@@ -27,15 +28,19 @@ function filenameFromSrc(src: string): string {
   }
 }
 
-function mergeSavedOrder(serverImages: string[], saved: string[] | null): string[] {
+function mergeSavedOrder(
+  serverImages: { src: string; width?: number; height?: number }[],
+  saved: string[] | null,
+): { src: string; width?: number; height?: number }[] {
   if (!saved?.length) return serverImages;
-  const valid = new Set(serverImages);
-  const ordered: string[] = [];
+  const bySrc = new Map(serverImages.map((item) => [item.src, item]));
+  const ordered: { src: string; width?: number; height?: number }[] = [];
   for (const src of saved) {
-    if (valid.has(src)) ordered.push(src);
+    const item = bySrc.get(src);
+    if (item) ordered.push(item);
   }
-  for (const src of serverImages) {
-    if (!ordered.includes(src)) ordered.push(src);
+  for (const item of serverImages) {
+    if (!ordered.some((existing) => existing.src === item.src)) ordered.push(item);
   }
   return ordered;
 }
@@ -64,9 +69,15 @@ function pickMipLevel(rectWidth: number): number | null {
 function LazyMedia({
   src,
   video,
+  width,
+  height,
+  useMipmaps,
 }: {
   src: string;
   video: boolean;
+  width?: number;
+  height?: number;
+  useMipmaps: boolean;
 }) {
   const [shouldLoad, setShouldLoad] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -84,7 +95,7 @@ function LazyMedia({
           observer.disconnect();
         }
       },
-      { rootMargin: "0px", threshold: 0.01 },
+      { rootMargin: "120px 0px", threshold: 0.01 },
     );
 
     observer.observe(element);
@@ -107,12 +118,14 @@ function LazyMedia({
 
   const mipLevel = pickMipLevel(containerWidth);
   const previewSrc =
-    mipLevel === null ? src : withBasePath(toPreviewSrc(src, mipLevel));
+    !useMipmaps || mipLevel === null ? src : withBasePath(toPreviewSrc(src, mipLevel));
   const finalSrc = sourceOverride ?? previewSrc;
 
   useEffect(() => {
     setSourceOverride(null);
   }, [previewSrc]);
+
+  const aspectRatio = width && height ? `${width} / ${height}` : "3 / 4";
 
   return (
     <div ref={wrapperRef} className="bg-neutral-100 dark:bg-neutral-900">
@@ -134,6 +147,8 @@ function LazyMedia({
             className="block h-auto w-full"
             loading="lazy"
             decoding="async"
+            width={width}
+            height={height}
             onError={() => {
               if (sourceOverride !== src) {
                 setSourceOverride(src);
@@ -142,7 +157,7 @@ function LazyMedia({
           />
         )
       ) : (
-        <div className="h-28 w-full sm:h-36" />
+        <div className="w-full" style={{ aspectRatio }} />
       )}
     </div>
   );
@@ -165,12 +180,23 @@ export default function Gallery({ images }: GalleryProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [reorderEnabled, setReorderEnabled] = useState(false);
+  const [mipmapsEnabled, setMipmapsEnabled] = useState(true);
   const [globalSyncNote, setGlobalSyncNote] = useState("");
 
   useEffect(() => {
     if (!GALLERY_REORDER_TOGGLE_VISIBLE) return;
     try {
       if (localStorage.getItem(REORDER_UI_KEY) === "1") setReorderEnabled(true);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(MIPMAPS_UI_KEY);
+      if (raw === "0") setMipmapsEnabled(false);
+      if (raw === "1") setMipmapsEnabled(true);
     } catch {
       /* ignore */
     }
@@ -194,10 +220,13 @@ export default function Gallery({ images }: GalleryProps) {
     setOrderedImages(mergeSavedOrder(images, saved));
   }, [images]);
 
-  const persistOrder = useCallback((next: string[]) => {
+  const persistOrder = useCallback((next: { src: string }[]) => {
     if (!reorderEnabled) return;
     try {
-      localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(
+        ORDER_STORAGE_KEY,
+        JSON.stringify(next.map((item) => item.src)),
+      );
     } catch {
       /* ignore quota / private mode */
     }
@@ -215,7 +244,7 @@ export default function Gallery({ images }: GalleryProps) {
   const exportGlobalOrder = useCallback(async () => {
     const payload = {
       updatedAt: new Date().toISOString(),
-      order: orderedImages,
+      order: orderedImages.map((item) => item.src),
     };
     const fileText =
       "/**\n" +
@@ -225,7 +254,7 @@ export default function Gallery({ images }: GalleryProps) {
       `export const GLOBAL_IMAGE_ORDER: string[] = ${JSON.stringify(payload.order, null, 2)};\n`;
 
     try {
-      localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orderedImages));
+      localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(payload.order));
     } catch {
       /* ignore */
     }
@@ -263,42 +292,63 @@ export default function Gallery({ images }: GalleryProps) {
   return (
     <>
       {/* MASONRY GRID */}
-      <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-6 sm:px-8 sm:pb-12 sm:pt-10 lg:px-12 lg:pb-20 lg:pt-16">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pb-28 pt-6 sm:px-8 sm:pb-32 sm:pt-10 lg:px-12 lg:pb-36 lg:pt-16">
         {GALLERY_REORDER_TOGGLE_VISIBLE && (
-          <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 pb-4 dark:border-neutral-800 sm:items-center">
-            <p className="max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-              {reorderEnabled
-                ? "Drag a grip onto another image to swap the two. Double-click an image to view fullscreen. Order is saved in this browser."
-                : "Turn on Reorder to swap images. Your order is remembered on this device."}
-            </p>
-            <div className="flex shrink-0 flex-wrap items-center gap-3">
-              <label className="flex cursor-pointer items-center gap-3 select-none">
-                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                  Reorder
-                </span>
-                <input
-                  type="checkbox"
-                  checked={reorderEnabled}
-                  onChange={(e) => {
-                    const on = e.target.checked;
-                    setReorderEnabled(on);
-                    try {
-                      localStorage.setItem(REORDER_UI_KEY, on ? "1" : "0");
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                  className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
-                />
-              </label>
-              <button
-                type="button"
-                onClick={exportGlobalOrder}
-                className="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                title="Export current local order as the new global default"
-              >
-                Make Global Default
-              </button>
+          <div className="fixed inset-x-4 bottom-3 z-50 sm:inset-x-8 lg:left-1/2 lg:w-[min(1440px,calc(100vw-6rem))] lg:-translate-x-1/2">
+            <div className="flex flex-wrap items-start justify-between gap-4 rounded border border-neutral-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90 sm:items-center">
+              <p className="max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                {reorderEnabled
+                  ? "Drag a grip onto another image to swap the two. Double-click an image to view fullscreen. Order is saved in this browser."
+                  : "Turn on Reorder to swap images. Your order is remembered on this device."}
+              </p>
+              <div className="flex shrink-0 flex-wrap items-center gap-3">
+                <label className="flex cursor-pointer items-center gap-3 select-none">
+                  <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                    Reorder
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={reorderEnabled}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setReorderEnabled(on);
+                      try {
+                        localStorage.setItem(REORDER_UI_KEY, on ? "1" : "0");
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
+                  />
+                </label>
+                <label className="flex cursor-pointer items-center gap-3 select-none">
+                  <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                    Mipmaps
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={mipmapsEnabled}
+                    onChange={(e) => {
+                      const on = e.target.checked;
+                      setMipmapsEnabled(on);
+                      try {
+                        localStorage.setItem(MIPMAPS_UI_KEY, on ? "1" : "0");
+                      } catch {
+                        /* ignore */
+                      }
+                    }}
+                    className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={exportGlobalOrder}
+                  className="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  title="Export current local order as the new global default"
+                >
+                  Make Global Default
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -306,9 +356,9 @@ export default function Gallery({ images }: GalleryProps) {
           <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">{globalSyncNote}</p>
         )}
         <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-1">
-          {orderedImages.map((src, index) => (
+          {orderedImages.map((item, index) => (
             <motion.div
-              key={src}
+              key={item.src}
               className={`group relative mb-1 break-inside-avoid ${
                 reorderEnabled ? "cursor-default" : "cursor-pointer"
               } ${
@@ -321,10 +371,10 @@ export default function Gallery({ images }: GalleryProps) {
               viewport={{ once: true }}
               transition={{ duration: 0.6, ease: "easeOut" }}
               onClick={() => {
-                if (!reorderEnabled) setActiveImage(src);
+                if (!reorderEnabled) setActiveImage(item.src);
               }}
               onDoubleClick={() => {
-                if (reorderEnabled) setActiveImage(src);
+                if (reorderEnabled) setActiveImage(item.src);
               }}
               onDragOver={
                 reorderEnabled
@@ -377,10 +427,22 @@ export default function Gallery({ images }: GalleryProps) {
                   <GripVertical className="size-4" strokeWidth={2} />
                 </div>
               )}
-              {isVideo(src) ? (
-                <LazyMedia src={withBasePath(src)} video />
+              {isVideo(item.src) ? (
+                <LazyMedia
+                  src={withBasePath(item.src)}
+                  video
+                  width={item.width}
+                  height={item.height}
+                  useMipmaps={mipmapsEnabled}
+                />
               ) : (
-                <LazyMedia src={withBasePath(src)} video={false} />
+                <LazyMedia
+                  src={withBasePath(item.src)}
+                  video={false}
+                  width={item.width}
+                  height={item.height}
+                  useMipmaps={mipmapsEnabled}
+                />
               )}
             </motion.div>
           ))}
