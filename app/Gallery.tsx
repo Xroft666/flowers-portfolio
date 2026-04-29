@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { GripVertical } from "lucide-react";
 import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./galleryConfig";
+import mipLevelsJson from "../config/mip-levels.json";
 
 interface GalleryProps {
   images: string[];
@@ -12,6 +13,7 @@ interface GalleryProps {
 const ORDER_STORAGE_KEY = "portfolio-content-image-order";
 const REORDER_UI_KEY = "portfolio-gallery-reorder-ui";
 const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+const MIP_LEVELS = [...mipLevelsJson.levels].sort((a, b) => a - b);
 
 function filenameFromSrc(src: string): string {
   const path = src.split("?")[0].split("#")[0];
@@ -43,6 +45,104 @@ function withBasePath(src: string): string {
   if (!src.startsWith("/")) return src;
   if (src.startsWith(`${BASE_PATH}/`) || src === BASE_PATH) return src;
   return `${BASE_PATH}${src}`;
+}
+
+function toPreviewSrc(src: string, width: number): string {
+  return src.replace("/content/", `/content-mips/${width}/`);
+}
+
+function pickMipLevel(rectWidth: number): number {
+  const safeWidth = Number.isFinite(rectWidth) ? rectWidth : 0;
+  for (const level of MIP_LEVELS) {
+    if (safeWidth <= level) return level;
+  }
+  return MIP_LEVELS[MIP_LEVELS.length - 1];
+}
+
+function LazyMedia({
+  src,
+  video,
+}: {
+  src: string;
+  video: boolean;
+}) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [sourceOverride, setSourceOverride] = useState<string | null>(null);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setShouldLoad(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: "300px 0px", threshold: 0.01 },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = wrapperRef.current;
+    if (!element) return;
+
+    setContainerWidth(element.clientWidth);
+    const resizeObserver = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (!entry) return;
+      setContainerWidth(entry.contentRect.width);
+    });
+    resizeObserver.observe(element);
+    return () => resizeObserver.disconnect();
+  }, []);
+
+  const mipLevel = pickMipLevel(containerWidth);
+  const previewSrc = withBasePath(toPreviewSrc(src, mipLevel));
+  const finalSrc = sourceOverride ?? previewSrc;
+
+  useEffect(() => {
+    setSourceOverride(null);
+  }, [previewSrc]);
+
+  return (
+    <div ref={wrapperRef} className="bg-neutral-100 dark:bg-neutral-900">
+      {shouldLoad ? (
+        video ? (
+          <video
+            src={src}
+            className="block h-auto w-full"
+            muted
+            playsInline
+            loop
+            autoPlay
+            preload="metadata"
+          />
+        ) : (
+          <img
+            src={finalSrc}
+            alt=""
+            className="block h-auto w-full"
+            loading="lazy"
+            decoding="async"
+            onError={() => {
+              if (sourceOverride !== src) {
+                setSourceOverride(src);
+              }
+            }}
+          />
+        )
+      ) : (
+        <div className="h-28 w-full sm:h-36" />
+      )}
+    </div>
+  );
 }
 
 function swapAt<T>(items: T[], i: number, j: number): T[] {
@@ -275,21 +375,9 @@ export default function Gallery({ images }: GalleryProps) {
                 </div>
               )}
               {isVideo(src) ? (
-                <video
-                  src={withBasePath(src)}
-                  className="w-full h-auto"
-                  muted
-                  playsInline
-                  loop
-                  autoPlay
-                />
+                <LazyMedia src={withBasePath(src)} video />
               ) : (
-                <img
-                  src={withBasePath(src)}
-                  alt=""
-                  className="w-full h-auto"
-                  loading="lazy"
-                />
+                <LazyMedia src={withBasePath(src)} video={false} />
               )}
             </motion.div>
           ))}
