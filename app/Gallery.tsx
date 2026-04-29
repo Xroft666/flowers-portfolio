@@ -399,8 +399,8 @@ export default function Gallery({ images }: GalleryProps) {
                   ? "ring-2 ring-white/40 ring-inset"
                   : ""
               } ${reorderEnabled && dragIndex === index ? "opacity-60" : ""}`}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
               transition={{ duration: 0.6, ease: "easeOut" }}
               onClick={() => {
