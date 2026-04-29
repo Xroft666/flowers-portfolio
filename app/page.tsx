@@ -4,6 +4,8 @@ import path from "path";
 import Gallery from "./Gallery";
 import { GLOBAL_IMAGE_ORDER } from "./globalOrder";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 function applyGlobalOrder(images: string[]): string[] {
   if (!GLOBAL_IMAGE_ORDER.length) return images;
   const valid = new Set(images);
@@ -24,7 +26,7 @@ export default function Page() {
     .readdirSync(contentDir)
     .filter((file) => !file.startsWith("."))
     .sort((a, b) => a.localeCompare(b))
-    .map((file) => `/content/${file}`);
+    .map((file) => `${BASE_PATH}/content/${file}`);
 
   return <Gallery images={applyGlobalOrder(baseImages)} />;
 }
