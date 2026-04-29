@@ -125,7 +125,7 @@ function LazyMedia({
     setSourceOverride(null);
   }, [previewSrc]);
 
-  const aspectRatio = width && height ? `${width} / ${height}` : "3 / 4";
+  const aspectRatio = width && height ? `${width} / ${height}` : video ? "9 / 16" : "3 / 4";
 
   return (
     <div ref={wrapperRef} className="bg-neutral-100 dark:bg-neutral-900">
@@ -133,7 +133,8 @@ function LazyMedia({
         video ? (
           <video
             src={src}
-            className="block h-auto w-full"
+            className="block h-auto w-full bg-neutral-100 object-cover dark:bg-neutral-900"
+            style={{ aspectRatio }}
             muted
             playsInline
             loop
@@ -318,7 +319,7 @@ export default function Gallery({ images }: GalleryProps) {
                 </label>
                 <label className="flex cursor-pointer items-center gap-3 select-none">
                   <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200 sm:text-sm">
-                    Mipmaps
+                    Mips
                   </span>
                   <input
                     type="checkbox"
@@ -343,7 +344,7 @@ export default function Gallery({ images }: GalleryProps) {
                   className="rounded border border-neutral-300 px-2.5 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 sm:px-3"
                   title="Export current local order as the new global default"
                 >
-                  Global Default
+                  Download
                 </button>
               </div>
             </div>
