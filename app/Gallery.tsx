@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { GripVertical } from "lucide-react";
-import { GALLERY_REORDER_TOGGLE_VISIBLE } from "./galleryConfig";
+import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./galleryConfig";
 
 interface GalleryProps {
   images: string[];
@@ -54,6 +54,7 @@ export default function Gallery({ images }: GalleryProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [reorderEnabled, setReorderEnabled] = useState(false);
+  const [globalSyncNote, setGlobalSyncNote] = useState("");
 
   useEffect(() => {
     if (!GALLERY_REORDER_TOGGLE_VISIBLE) return;
@@ -100,6 +101,54 @@ export default function Gallery({ images }: GalleryProps) {
     );
   };
 
+  const exportGlobalOrder = useCallback(async () => {
+    const payload = {
+      updatedAt: new Date().toISOString(),
+      order: orderedImages,
+    };
+    const fileText =
+      "/**\n" +
+      " * Global image order used for all visitors as the default gallery order.\n" +
+      " * Updated from the gallery UI.\n" +
+      " */\n" +
+      `export const GLOBAL_IMAGE_ORDER: string[] = ${JSON.stringify(payload.order, null, 2)};\n`;
+
+    try {
+      localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orderedImages));
+    } catch {
+      /* ignore */
+    }
+
+    try {
+      await navigator.clipboard.writeText(fileText);
+    } catch {
+      /* clipboard may be blocked */
+    }
+
+    try {
+      const blob = new Blob([fileText], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "globalOrder.ts";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      /* ignore */
+    }
+
+    if (GLOBAL_ORDER_EDIT_URL) {
+      window.open(GLOBAL_ORDER_EDIT_URL, "_blank", "noopener,noreferrer");
+      setGlobalSyncNote("Copied + downloaded. Update app/globalOrder.ts in GitHub and commit.");
+    } else {
+      setGlobalSyncNote(
+        "Copied + downloaded. Paste into app/globalOrder.ts, commit, and redeploy.",
+      );
+    }
+  }, [orderedImages]);
+
   return (
     <>
       {/* MASONRY GRID */}
@@ -111,26 +160,39 @@ export default function Gallery({ images }: GalleryProps) {
                 ? "Drag a grip onto another image to swap the two. Double-click an image to view fullscreen. Order is saved in this browser."
                 : "Turn on Reorder to swap images. Your order is remembered on this device."}
             </p>
-            <label className="flex shrink-0 cursor-pointer items-center gap-3 select-none">
-              <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
-                Reorder
-              </span>
-              <input
-                type="checkbox"
-                checked={reorderEnabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  setReorderEnabled(on);
-                  try {
-                    localStorage.setItem(REORDER_UI_KEY, on ? "1" : "0");
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
-              />
-            </label>
+            <div className="flex shrink-0 flex-wrap items-center gap-3">
+              <label className="flex cursor-pointer items-center gap-3 select-none">
+                <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  Reorder
+                </span>
+                <input
+                  type="checkbox"
+                  checked={reorderEnabled}
+                  onChange={(e) => {
+                    const on = e.target.checked;
+                    setReorderEnabled(on);
+                    try {
+                      localStorage.setItem(REORDER_UI_KEY, on ? "1" : "0");
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={exportGlobalOrder}
+                className="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                title="Export current local order as the new global default"
+              >
+                Make Global Default
+              </button>
+            </div>
           </div>
+        )}
+        {globalSyncNote && (
+          <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">{globalSyncNote}</p>
         )}
         <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-1">
           {orderedImages.map((src, index) => (

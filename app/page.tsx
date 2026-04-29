@@ -2,6 +2,20 @@
 import fs from "fs";
 import path from "path";
 import Gallery from "./Gallery";
+import { GLOBAL_IMAGE_ORDER } from "./globalOrder";
+
+function applyGlobalOrder(images: string[]): string[] {
+  if (!GLOBAL_IMAGE_ORDER.length) return images;
+  const valid = new Set(images);
+  const ordered: string[] = [];
+  for (const src of GLOBAL_IMAGE_ORDER) {
+    if (valid.has(src)) ordered.push(src);
+  }
+  for (const src of images) {
+    if (!ordered.includes(src)) ordered.push(src);
+  }
+  return ordered;
+}
 
 export default function Page() {
   const contentDir = path.join(process.cwd(), "public/content");
@@ -12,5 +26,5 @@ export default function Page() {
     .sort((a, b) => a.localeCompare(b))
     .map((file) => `/content/${file}`);
 
-  return <Gallery images={baseImages} />;
+  return <Gallery images={applyGlobalOrder(baseImages)} />;
 }
