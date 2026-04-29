@@ -294,16 +294,11 @@ export default function Gallery({ images }: GalleryProps) {
       {/* MASONRY GRID */}
       <div className="mx-auto w-full max-w-[1440px] px-4 pb-28 pt-6 sm:px-8 sm:pb-32 sm:pt-10 lg:px-12 lg:pb-36 lg:pt-16">
         {GALLERY_REORDER_TOGGLE_VISIBLE && (
-          <div className="fixed inset-x-4 bottom-3 z-50 sm:inset-x-8 lg:left-1/2 lg:w-[min(1440px,calc(100vw-6rem))] lg:-translate-x-1/2">
-            <div className="flex flex-wrap items-start justify-between gap-4 rounded border border-neutral-200 bg-white/95 p-3 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90 sm:items-center">
-              <p className="max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
-                {reorderEnabled
-                  ? "Drag a grip onto another image to swap the two. Double-click an image to view fullscreen. Order is saved in this browser."
-                  : "Turn on Reorder to swap images. Your order is remembered on this device."}
-              </p>
-              <div className="flex shrink-0 flex-wrap items-center gap-3">
+          <div className="fixed inset-x-2 bottom-2 z-50 sm:inset-x-4 lg:left-1/2 lg:w-[min(1440px,calc(100vw-3rem))] lg:-translate-x-1/2">
+            <div className="flex flex-wrap items-center justify-center gap-2 rounded border border-neutral-200 bg-white/95 px-2 py-2 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/90 sm:justify-between sm:px-3">
+              <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
                 <label className="flex cursor-pointer items-center gap-3 select-none">
-                  <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200 sm:text-sm">
                     Reorder
                   </span>
                   <input
@@ -322,7 +317,7 @@ export default function Gallery({ images }: GalleryProps) {
                   />
                 </label>
                 <label className="flex cursor-pointer items-center gap-3 select-none">
-                  <span className="text-sm font-medium text-neutral-800 dark:text-neutral-200">
+                  <span className="text-xs font-medium text-neutral-800 dark:text-neutral-200 sm:text-sm">
                     Mipmaps
                   </span>
                   <input
@@ -340,13 +335,15 @@ export default function Gallery({ images }: GalleryProps) {
                     className="h-5 w-9 cursor-pointer rounded-full accent-neutral-900 dark:accent-neutral-100"
                   />
                 </label>
+              </div>
+              <div className="flex items-center justify-center">
                 <button
                   type="button"
                   onClick={exportGlobalOrder}
-                  className="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  className="rounded border border-neutral-300 px-2.5 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-100 dark:border-neutral-700 dark:text-neutral-200 dark:hover:bg-neutral-800 sm:px-3"
                   title="Export current local order as the new global default"
                 >
-                  Make Global Default
+                  Global Default
                 </button>
               </div>
             </div>
