@@ -11,6 +11,7 @@ interface GalleryProps {
 
 const ORDER_STORAGE_KEY = "portfolio-content-image-order";
 const REORDER_UI_KEY = "portfolio-gallery-reorder-ui";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 
 function filenameFromSrc(src: string): string {
   const path = src.split("?")[0].split("#")[0];
@@ -35,6 +36,13 @@ function mergeSavedOrder(serverImages: string[], saved: string[] | null): string
     if (!ordered.includes(src)) ordered.push(src);
   }
   return ordered;
+}
+
+function withBasePath(src: string): string {
+  if (!BASE_PATH) return src;
+  if (!src.startsWith("/")) return src;
+  if (src.startsWith(`${BASE_PATH}/`) || src === BASE_PATH) return src;
+  return `${BASE_PATH}${src}`;
 }
 
 function swapAt<T>(items: T[], i: number, j: number): T[] {
@@ -268,7 +276,7 @@ export default function Gallery({ images }: GalleryProps) {
               )}
               {isVideo(src) ? (
                 <video
-                  src={src}
+                  src={withBasePath(src)}
                   className="w-full h-auto"
                   muted
                   playsInline
@@ -277,7 +285,7 @@ export default function Gallery({ images }: GalleryProps) {
                 />
               ) : (
                 <img
-                  src={src}
+                  src={withBasePath(src)}
                   alt=""
                   className="w-full h-auto"
                   loading="lazy"
@@ -301,7 +309,7 @@ export default function Gallery({ images }: GalleryProps) {
         >
           {isVideo(activeImage) ? (
             <video
-              src={activeImage}
+              src={withBasePath(activeImage)}
               className="max-w-full max-h-full"
               muted
               playsInline
@@ -311,7 +319,7 @@ export default function Gallery({ images }: GalleryProps) {
             />
           ) : (
             <img
-              src={activeImage}
+              src={withBasePath(activeImage)}
               alt=""
               className="max-w-full max-h-full"
             />
