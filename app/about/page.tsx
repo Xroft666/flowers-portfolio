@@ -1,3 +1,5 @@
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+
 export default function AboutPage() {
   return (
     <div className="p-24">
@@ -6,7 +8,7 @@ export default function AboutPage() {
         {/* IMAGE */}
         <div className="flex justify-end">
           <img
-            src="/content/about.jpeg"
+            src={`${BASE_PATH}/content/about.jpeg`}
             alt="About Komorebi"
             className="w-1/1.5 h-auto"
           />
