@@ -160,10 +160,10 @@ export default function Gallery({ images }: GalleryProps) {
   return (
     <>
       {/* MASONRY GRID */}
-     <div className="p-24 pt-32">
+      <div className="mx-auto w-full max-w-[1440px] px-4 pb-8 pt-6 sm:px-8 sm:pb-12 sm:pt-10 lg:px-12 lg:pb-20 lg:pt-16">
         {GALLERY_REORDER_TOGGLE_VISIBLE && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-neutral-200 pb-4 dark:border-neutral-800">
-            <p className="max-w-xl text-sm text-neutral-600 dark:text-neutral-400">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-neutral-200 pb-4 dark:border-neutral-800 sm:items-center">
+            <p className="max-w-xl text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
               {reorderEnabled
                 ? "Drag a grip onto another image to swap the two. Double-click an image to view fullscreen. Order is saved in this browser."
                 : "Turn on Reorder to swap images. Your order is remembered on this device."}
@@ -202,7 +202,7 @@ export default function Gallery({ images }: GalleryProps) {
         {globalSyncNote && (
           <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">{globalSyncNote}</p>
         )}
-        <div className="columns-2 sm:columns-3 md:columns-4 lg:columns-5 gap-1">
+        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-1">
           {orderedImages.map((src, index) => (
             <motion.div
               key={src}
