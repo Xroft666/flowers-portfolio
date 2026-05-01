@@ -1,8 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent as ReactDragEvent,
+} from "react";
 import { motion } from "framer-motion";
-import { GripVertical } from "lucide-react";
+import Masonry from "react-masonry-css";
 import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./galleryConfig";
 import mipLevelsJson from "../config/mip-levels.json";
 
@@ -94,12 +100,14 @@ function LazyMedia({
   width,
   height,
   useMipmaps,
+  suppressBrowserDrag,
 }: {
   src: string;
   video: boolean;
   width?: number;
   height?: number;
   useMipmaps: boolean;
+  suppressBrowserDrag?: boolean;
 }) {
   const [shouldLoad, setShouldLoad] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -165,6 +173,7 @@ function LazyMedia({
             src={src}
             className="block h-auto w-full bg-neutral-100 object-cover dark:bg-neutral-900"
             style={{ aspectRatio }}
+            draggable={suppressBrowserDrag ? false : undefined}
             muted
             playsInline
             loop
@@ -176,6 +185,7 @@ function LazyMedia({
             src={finalSrc}
             alt=""
             className="block h-auto w-full"
+            draggable={suppressBrowserDrag ? false : undefined}
             loading="lazy"
             decoding="async"
             width={width}
@@ -199,6 +209,9 @@ function LazyMedia({
   );
 }
 
+/** Visual zoom-out factor when reorder is on (~5× field of view). */
+const REORDER_GRID_SCALE = 0.22;
+
 function swapAt<T>(items: T[], i: number, j: number): T[] {
   if (i === j || i < 0 || j < 0 || i >= items.length || j >= items.length) {
     return items;
@@ -216,7 +229,7 @@ export default function Gallery({ images }: GalleryProps) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [reorderEnabled, setReorderEnabled] = useState(false);
-  const [mipmapsEnabled, setMipmapsEnabled] = useState(true);
+  const [mipmapsEnabled, setMipmapsEnabled] = useState(false);
   const [globalSyncNote, setGlobalSyncNote] = useState("");
 
   useEffect(() => {
@@ -231,7 +244,6 @@ export default function Gallery({ images }: GalleryProps) {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(MIPMAPS_UI_KEY);
-      if (raw === "0") setMipmapsEnabled(false);
       if (raw === "1") setMipmapsEnabled(true);
     } catch {
       /* ignore */
@@ -325,6 +337,10 @@ export default function Gallery({ images }: GalleryProps) {
     }
   }, [orderedImages]);
 
+  const activeMediaMeta = activeImage
+    ? orderedImages.find((item) => item.src === activeImage)
+    : undefined;
+
   return (
     <>
       {/* MASONRY GRID */}
@@ -388,97 +404,125 @@ export default function Gallery({ images }: GalleryProps) {
         {globalSyncNote && (
           <p className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">{globalSyncNote}</p>
         )}
-        <div className="columns-2 md:columns-3 lg:columns-4 xl:columns-5 gap-1">
-          {orderedImages.map((item, index) => (
-            <motion.div
-              key={item.src}
-              className={`group relative mb-1 break-inside-avoid ${
-                reorderEnabled ? "cursor-default" : "cursor-pointer"
-              } ${
-                reorderEnabled && dragOverIndex === index && dragIndex !== index
-                  ? "ring-2 ring-white/40 ring-inset"
-                  : ""
-              } ${reorderEnabled && dragIndex === index ? "opacity-60" : ""}`}
-              initial={{ opacity: 0 }}
-              whileInView={{ opacity: 1 }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.6, ease: "easeOut" }}
-              onClick={() => {
-                if (!reorderEnabled) setActiveImage(item.src);
-              }}
-              onDoubleClick={() => {
-                if (reorderEnabled) setActiveImage(item.src);
-              }}
-              onDragOver={
-                reorderEnabled
-                  ? (e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                      if (dragIndex !== null) setDragOverIndex(index);
-                    }
-                  : undefined
-              }
-              onDragLeave={
-                reorderEnabled
-                  ? () => {
-                      setDragOverIndex((prev) => (prev === index ? null : prev));
-                    }
-                  : undefined
-              }
-              onDrop={
-                reorderEnabled
-                  ? (e) => {
-                      e.preventDefault();
-                      if (dragIndex === null) return;
-                      const next = swapAt(orderedImages, dragIndex, index);
-                      setOrderedImages(next);
-                      persistOrder(next);
-                      setDragIndex(null);
-                      setDragOverIndex(null);
-                    }
-                  : undefined
-              }
+        <div
+          className={
+            reorderEnabled
+              ? "max-h-[85vh] overflow-auto overscroll-contain rounded-lg border border-neutral-300 bg-neutral-50/80 py-2 dark:border-neutral-700 dark:bg-neutral-950/40"
+              : ""
+          }
+        >
+          <div
+            style={
+              reorderEnabled
+                ? {
+                    transform: `scale(${REORDER_GRID_SCALE})`,
+                    transformOrigin: "top center",
+                  }
+                : undefined
+            }
+          >
+            <Masonry
+              breakpointCols={{ default: 4, 768: 2 }}
+              className="gallery-masonry-grid min-w-0"
+              columnClassName="gallery-masonry-grid-column"
             >
-              {reorderEnabled && (
-                <div
-                  className="absolute left-1 top-1 z-10 flex cursor-grab items-center rounded bg-black/60 px-1 py-0.5 text-white shadow-sm ring-1 ring-white/20 active:cursor-grabbing"
-                  draggable
-                  onDragStart={(e) => {
-                    e.stopPropagation();
-                    setDragIndex(index);
-                    e.dataTransfer.effectAllowed = "move";
-                    e.dataTransfer.setData("text/plain", String(index));
+              {orderedImages.map((item, index) => (
+                <motion.div
+                  key={item.src}
+                  className={`group relative mb-1 ${
+                    reorderEnabled ? "" : "cursor-pointer"
+                  } ${
+                    reorderEnabled && dragOverIndex === index && dragIndex !== index
+                      ? "ring-2 ring-white/40 ring-inset"
+                      : ""
+                  } ${reorderEnabled && dragIndex === index ? "opacity-60" : ""}`}
+                  initial={{ opacity: 0 }}
+                  whileInView={{ opacity: 1 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.6, ease: "easeOut" }}
+                  onClick={() => {
+                    if (!reorderEnabled) setActiveImage(item.src);
                   }}
-                  onDragEnd={() => {
-                    setDragIndex(null);
-                    setDragOverIndex(null);
+                  onDoubleClick={() => {
+                    if (reorderEnabled) setActiveImage(item.src);
                   }}
-                  onClick={(e) => e.stopPropagation()}
-                  title="Drag onto another image to swap"
-                  aria-label="Drag onto another image to swap"
+                  onDragOver={
+                    reorderEnabled
+                      ? (e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (dragIndex !== null) setDragOverIndex(index);
+                        }
+                      : undefined
+                  }
+                  onDragLeave={
+                    reorderEnabled
+                      ? () => {
+                          setDragOverIndex((prev) => (prev === index ? null : prev));
+                        }
+                      : undefined
+                  }
+                  onDrop={
+                    reorderEnabled
+                      ? (e) => {
+                          e.preventDefault();
+                          if (dragIndex === null) return;
+                          const next = swapAt(orderedImages, dragIndex, index);
+                          setOrderedImages(next);
+                          persistOrder(next);
+                          setDragIndex(null);
+                          setDragOverIndex(null);
+                        }
+                      : undefined
+                  }
                 >
-                  <GripVertical className="size-4" strokeWidth={2} />
-                </div>
-              )}
-              {isVideo(item.src) ? (
-                <LazyMedia
-                  src={withBasePath(item.src)}
-                  video
-                  width={item.width}
-                  height={item.height}
-                  useMipmaps={mipmapsEnabled}
-                />
-              ) : (
-                <LazyMedia
-                  src={withBasePath(item.src)}
-                  video={false}
-                  width={item.width}
-                  height={item.height}
-                  useMipmaps={mipmapsEnabled}
-                />
-              )}
-            </motion.div>
-          ))}
+                  <div
+                    draggable={reorderEnabled}
+                    className={
+                      reorderEnabled ? "cursor-grab active:cursor-grabbing" : undefined
+                    }
+                    onDragStart={
+                      reorderEnabled
+                        ? (e: ReactDragEvent<HTMLDivElement>) => {
+                            setDragIndex(index);
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", String(index));
+                          }
+                        : undefined
+                    }
+                    onDragEnd={
+                      reorderEnabled
+                        ? () => {
+                            setDragIndex(null);
+                            setDragOverIndex(null);
+                          }
+                        : undefined
+                    }
+                  >
+                    {isVideo(item.src) ? (
+                      <LazyMedia
+                        src={withBasePath(item.src)}
+                        video
+                        width={item.width}
+                        height={item.height}
+                        useMipmaps={mipmapsEnabled}
+                        suppressBrowserDrag={reorderEnabled}
+                      />
+                    ) : (
+                      <LazyMedia
+                        src={withBasePath(item.src)}
+                        video={false}
+                        width={item.width}
+                        height={item.height}
+                        useMipmaps={mipmapsEnabled}
+                        suppressBrowserDrag={reorderEnabled}
+                      />
+                    )}
+                  </div>
+                </motion.div>
+              ))}
+            </Masonry>
+          </div>
         </div>
       </div>
 
@@ -515,11 +559,15 @@ export default function Gallery({ images }: GalleryProps) {
               />
             )}
           </div>
-          <div
-            className="pointer-events-none absolute bottom-4 left-4 max-w-[min(90vw,28rem)] truncate font-mono text-[11px] text-white/30 select-text"
-            aria-hidden
-          >
-            {filenameFromSrc(activeImage)}
+          <div className="pointer-events-none absolute bottom-4 left-4 flex max-w-[min(90vw,28rem)] flex-col gap-0.5 font-mono text-[11px] text-white/30 select-text">
+            <span className="truncate" aria-hidden>
+              {filenameFromSrc(activeImage)}
+            </span>
+            {activeMediaMeta?.width != null && activeMediaMeta.height != null ? (
+              <span className="text-white/25">
+                {activeMediaMeta.width} × {activeMediaMeta.height}px
+              </span>
+            ) : null}
           </div>
         </div>
       )}

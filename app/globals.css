@@ -112,6 +112,18 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* react-masonry-css — gutter matches gap-1 (4px); flex layout avoids broken CSS column-count. */
+.gallery-masonry-grid {
+  display: flex;
+  margin-left: -0.25rem;
+  width: auto;
+}
+
+.gallery-masonry-grid-column {
+  padding-left: 0.25rem;
+  background-clip: padding-box;
+}
+
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
