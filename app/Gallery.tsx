@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type DragEvent as ReactDragEvent,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Masonry from "react-masonry-css";
 import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./galleryConfig";
@@ -226,8 +220,10 @@ function swapAt<T>(items: T[], i: number, j: number): T[] {
 export default function Gallery({ images }: GalleryProps) {
   const [activeImage, setActiveImage] = useState<string | null>(null);
   const [orderedImages, setOrderedImages] = useState(images);
-  const [dragIndex, setDragIndex] = useState<number | null>(null);
-  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  /** First tile picked in reorder mode; second click swaps or same click clears. */
+  const [reorderPickIndex, setReorderPickIndex] = useState<number | null>(null);
+  /** Mirrors pick for click handling without nesting setState (Strict Mode runs updaters twice). */
+  const reorderPickRef = useRef<number | null>(null);
   const [reorderEnabled, setReorderEnabled] = useState(false);
   const [mipmapsEnabled, setMipmapsEnabled] = useState(false);
   const [globalSyncNote, setGlobalSyncNote] = useState("");
@@ -252,8 +248,8 @@ export default function Gallery({ images }: GalleryProps) {
 
   useEffect(() => {
     if (!reorderEnabled) {
-      setDragIndex(null);
-      setDragOverIndex(null);
+      reorderPickRef.current = null;
+      setReorderPickIndex(null);
     }
   }, [reorderEnabled]);
 
@@ -279,6 +275,34 @@ export default function Gallery({ images }: GalleryProps) {
       /* ignore quota / private mode */
     }
   }, [reorderEnabled]);
+
+  const handleThumbnailClick = useCallback(
+    (index: number, src: string) => {
+      if (!reorderEnabled) {
+        setActiveImage(src);
+        return;
+      }
+      const picked = reorderPickRef.current;
+      if (picked === null) {
+        reorderPickRef.current = index;
+        setReorderPickIndex(index);
+        return;
+      }
+      if (picked === index) {
+        reorderPickRef.current = null;
+        setReorderPickIndex(null);
+        return;
+      }
+      setOrderedImages((items) => {
+        const next = swapAt(items, picked, index);
+        persistOrder(next);
+        return next;
+      });
+      reorderPickRef.current = null;
+      setReorderPickIndex(null);
+    },
+    [reorderEnabled, persistOrder],
+  );
 
   const isVideo = (src: string) => {
     const lower = src.toLowerCase();
@@ -429,96 +453,45 @@ export default function Gallery({ images }: GalleryProps) {
               {orderedImages.map((item, index) => (
                 <motion.div
                   key={item.src}
-                  className={`group relative mb-1 ${
-                    reorderEnabled ? "" : "cursor-pointer"
-                  } ${
-                    reorderEnabled && dragOverIndex === index && dragIndex !== index
-                      ? "ring-2 ring-white/40 ring-inset"
+                  className={`group relative mb-1 cursor-pointer ${
+                    reorderEnabled && reorderPickIndex === index
+                      ? "ring-2 ring-amber-400 ring-inset dark:ring-amber-300"
                       : ""
-                  } ${reorderEnabled && dragIndex === index ? "opacity-60" : ""}`}
+                  }`}
                   initial={{ opacity: 0 }}
                   whileInView={{ opacity: 1 }}
                   viewport={{ once: true }}
                   transition={{ duration: 0.6, ease: "easeOut" }}
-                  onClick={() => {
-                    if (!reorderEnabled) setActiveImage(item.src);
-                  }}
+                  onClick={() => handleThumbnailClick(index, item.src)}
                   onDoubleClick={() => {
                     if (reorderEnabled) setActiveImage(item.src);
                   }}
-                  onDragOver={
-                    reorderEnabled
-                      ? (e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = "move";
-                          if (dragIndex !== null) setDragOverIndex(index);
-                        }
-                      : undefined
-                  }
-                  onDragLeave={
-                    reorderEnabled
-                      ? () => {
-                          setDragOverIndex((prev) => (prev === index ? null : prev));
-                        }
-                      : undefined
-                  }
-                  onDrop={
-                    reorderEnabled
-                      ? (e) => {
-                          e.preventDefault();
-                          if (dragIndex === null) return;
-                          const next = swapAt(orderedImages, dragIndex, index);
-                          setOrderedImages(next);
-                          persistOrder(next);
-                          setDragIndex(null);
-                          setDragOverIndex(null);
-                        }
-                      : undefined
-                  }
                 >
-                  <div
-                    draggable={reorderEnabled}
-                    className={
-                      reorderEnabled ? "cursor-grab active:cursor-grabbing" : undefined
-                    }
-                    onDragStart={
-                      reorderEnabled
-                        ? (e: ReactDragEvent<HTMLDivElement>) => {
-                            setDragIndex(index);
-                            e.dataTransfer.effectAllowed = "move";
-                            e.dataTransfer.setData("text/plain", String(index));
-                          }
-                        : undefined
-                    }
-                    onDragEnd={
-                      reorderEnabled
-                        ? () => {
-                            setDragIndex(null);
-                            setDragOverIndex(null);
-                          }
-                        : undefined
-                    }
-                  >
-                    {isVideo(item.src) ? (
-                      <LazyMedia
-                        src={withBasePath(item.src)}
-                        video
-                        width={item.width}
-                        height={item.height}
-                        useMipmaps={mipmapsEnabled}
-                        suppressBrowserDrag={reorderEnabled}
-                      />
-                    ) : (
-                      <LazyMedia
-                        src={withBasePath(item.src)}
-                        video={false}
-                        width={item.width}
-                        height={item.height}
-                        useMipmaps={mipmapsEnabled}
-                        suppressBrowserDrag={reorderEnabled}
-                      />
-                    )}
-                  </div>
+                  {reorderEnabled && reorderPickIndex === index ? (
+                    <div
+                      aria-hidden
+                      className="pointer-events-none absolute inset-0 z-[1] bg-amber-400/38 dark:bg-amber-300/32"
+                    />
+                  ) : null}
+                  {isVideo(item.src) ? (
+                    <LazyMedia
+                      src={withBasePath(item.src)}
+                      video
+                      width={item.width}
+                      height={item.height}
+                      useMipmaps={mipmapsEnabled}
+                      suppressBrowserDrag={reorderEnabled}
+                    />
+                  ) : (
+                    <LazyMedia
+                      src={withBasePath(item.src)}
+                      video={false}
+                      width={item.width}
+                      height={item.height}
+                      useMipmaps={mipmapsEnabled}
+                      suppressBrowserDrag={reorderEnabled}
+                    />
+                  )}
                 </motion.div>
               ))}
             </Masonry>
