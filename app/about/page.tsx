@@ -8,7 +8,7 @@ export default function AboutPage() {
         {/* IMAGE */}
         <div className="order-1 flex justify-center md:justify-end">
           <img
-            src={`${BASE_PATH}/content/about.jpeg`}
+            src={`${BASE_PATH}/about/about.jpeg`}
             alt="About Komorebi"
             className="h-auto w-full max-w-md"
           />
