@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import Masonry from "react-masonry-css";
 import { GALLERY_REORDER_TOGGLE_VISIBLE, GLOBAL_ORDER_EDIT_URL } from "./galleryConfig";
@@ -203,9 +203,6 @@ function LazyMedia({
   );
 }
 
-/** Visual zoom-out factor when reorder is on (~5× field of view). */
-const REORDER_GRID_SCALE = 0.22;
-
 function swapAt<T>(items: T[], i: number, j: number): T[] {
   if (i === j || i < 0 || j < 0 || i >= items.length || j >= items.length) {
     return items;
@@ -224,6 +221,8 @@ export default function Gallery({ images }: GalleryProps) {
   const [reorderPickIndex, setReorderPickIndex] = useState<number | null>(null);
   /** Mirrors pick for click handling without nesting setState (Strict Mode runs updaters twice). */
   const reorderPickRef = useRef<number | null>(null);
+  /** After a reorder swap, restore window scroll (masonry reflow + scroll anchoring otherwise jump the view). */
+  const postSwapScrollRef = useRef<{ x: number; y: number } | null>(null);
   const [reorderEnabled, setReorderEnabled] = useState(false);
   const [mipmapsEnabled, setMipmapsEnabled] = useState(false);
   const [globalSyncNote, setGlobalSyncNote] = useState("");
@@ -252,6 +251,16 @@ export default function Gallery({ images }: GalleryProps) {
       setReorderPickIndex(null);
     }
   }, [reorderEnabled]);
+
+  useLayoutEffect(() => {
+    const pos = postSwapScrollRef.current;
+    if (pos === null) return;
+    postSwapScrollRef.current = null;
+    window.scrollTo(pos.x, pos.y);
+    requestAnimationFrame(() => {
+      window.scrollTo(pos.x, pos.y);
+    });
+  }, [orderedImages]);
 
   useEffect(() => {
     let saved: string[] | null = null;
@@ -293,6 +302,10 @@ export default function Gallery({ images }: GalleryProps) {
         setReorderPickIndex(null);
         return;
       }
+      postSwapScrollRef.current = {
+        x: window.scrollX,
+        y: window.scrollY,
+      };
       setOrderedImages((items) => {
         const next = swapAt(items, picked, index);
         persistOrder(next);
@@ -431,25 +444,15 @@ export default function Gallery({ images }: GalleryProps) {
         <div
           className={
             reorderEnabled
-              ? "max-h-[85vh] overflow-auto overscroll-contain rounded-lg border border-neutral-300 bg-neutral-50/80 py-2 dark:border-neutral-700 dark:bg-neutral-950/40"
+              ? "rounded-lg border border-neutral-300 bg-neutral-50/80 py-2 dark:border-neutral-700 dark:bg-neutral-950/40"
               : ""
           }
         >
-          <div
-            style={
-              reorderEnabled
-                ? {
-                    transform: `scale(${REORDER_GRID_SCALE})`,
-                    transformOrigin: "top center",
-                  }
-                : undefined
-            }
+          <Masonry
+            breakpointCols={{ default: 4, 768: 2 }}
+            className="gallery-masonry-grid min-w-0"
+            columnClassName="gallery-masonry-grid-column"
           >
-            <Masonry
-              breakpointCols={{ default: 4, 768: 2 }}
-              className="gallery-masonry-grid min-w-0"
-              columnClassName="gallery-masonry-grid-column"
-            >
               {orderedImages.map((item, index) => (
                 <motion.div
                   key={item.src}
@@ -494,8 +497,7 @@ export default function Gallery({ images }: GalleryProps) {
                   )}
                 </motion.div>
               ))}
-            </Masonry>
-          </div>
+          </Masonry>
         </div>
       </div>
 

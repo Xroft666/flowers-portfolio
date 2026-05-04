@@ -117,11 +117,14 @@
   display: flex;
   margin-left: -0.25rem;
   width: auto;
+  /* Masonry reflow on reorder swaps can trigger scroll anchoring jumps; keep the window stable ourselves. */
+  overflow-anchor: none;
 }
 
 .gallery-masonry-grid-column {
   padding-left: 0.25rem;
   background-clip: padding-box;
+  overflow-anchor: none;
 }
 
 @layer base {
